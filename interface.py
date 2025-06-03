@@ -1,9 +1,11 @@
-# SISTEMA COMPLETO DE REBAIXA DE PREÇOS - VISUAL MELHORADO + CORREÇÕES RETAGUARDA
+# SISTEMA COMPLETO DE REBAIXA DE PREÇOS - VISUAL REFINADO E REGRAS AVANÇADAS
 import streamlit as st
 import pandas as pd
 import os
 from datetime import date, datetime
 import matplotlib.pyplot as plt
+import io
+from fpdf import FPDF
 
 # ========== USUÁRIOS ==========
 usuarios = {
@@ -14,7 +16,7 @@ usuarios = {
     "647": {"senha": "1234", "loja": "647", "nivel": "loja"},
     "450": {"senha": "1234", "loja": "450", "nivel": "loja"},
     "531": {"senha": "1234", "loja": "531", "nivel": "loja"},
-    "2003": {"senha": "@abc789", "loja": "todos", "nivel": "admin"},
+    "2003": {"senha": "1234", "loja": "todos", "nivel": "admin"},
 }
 
 # ========== LOGIN ==========
@@ -22,6 +24,7 @@ if 'logado' not in st.session_state:
     st.session_state.logado = False
     st.session_state.timeout = datetime.now()
 
+# Mantém login válido por 12 horas
 if datetime.now() > st.session_state.get("timeout", datetime.now()) + pd.Timedelta(hours=12):
     st.session_state.logado = False
 
@@ -59,89 +62,6 @@ if st.session_state.nivel == "admin":
     menu_opcoes += ["Retaguarda", "Relatórios"]
 menu = st.sidebar.selectbox("Menu", menu_opcoes)
 
-# ========== CADASTRO ==========
-if menu == "Cadastrar Produto":
-    st.header(":memo: Cadastrar Produto")
-    with st.form("form_produto", clear_on_submit=True):
-        ean = st.text_input("Código EAN")
-        nome = st.text_input("Nome do Produto")
-        qtd = st.number_input("Quantidade a vencer", min_value=1)
-        validade = st.date_input("Data de validade", min_value=date.today())
-        preco = st.text_input("Preço Atual")
-        responsavel = st.text_input("Responsável")
-        loja = st.session_state.loja if st.session_state.nivel != "admin" else st.selectbox("Loja", ["710","728","736","655","647","450","531"])
-        enviado = st.form_submit_button("Salvar")
-
-    if enviado:
-        if not all([ean, nome, qtd, validade, preco, responsavel]):
-            st.warning("⚠️ Preencha todos os campos obrigatórios!")
-        else:
-            novo = {
-                "EAN": ean,
-                "Nome": nome,
-                "Quantidade": qtd,
-                "Validade": validade.strftime("%Y-%m-%d"),
-                "Preço Atual": preco,
-                "Preço Sugestão": "",
-                "Responsável": responsavel,
-                "Loja": loja,
-                "Data Cadastro": date.today().strftime("%Y-%m-%d"),
-                "Status": "Aguardando"
-            }
-            st.session_state.db.append(novo)
-            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-            st.success("✅ Produto cadastrado com sucesso!")
-
-# ========== RETAGUARDA ==========
-if menu == "Retaguarda":
-    st.header(":clipboard: Retaguarda de Produtos")
-    df = pd.DataFrame(st.session_state.db)
-    df["Validade"] = pd.to_datetime(df["Validade"], errors='coerce')
-    df["Dias para Vencer"] = (df["Validade"] - pd.to_datetime(date.today())).dt.days
-    df["Dias de Antecedência"] = (pd.to_datetime(df["Validade"]) - pd.to_datetime(df["Data Cadastro"])).dt.days
-    df["Loja"] = df["Loja"].astype(str)
-
-    loja_selecionada = st.selectbox("Filtrar por Loja:", sorted(df["Loja"].unique()))
-    df = df[df["Loja"] == loja_selecionada]
-
-    col1, col2 = st.columns(2)
-    with col1:
-        status_filtro = st.selectbox("Filtrar por status:", ["Todos", "Aguardando", "Precificado"])
-        if status_filtro != "Todos":
-            df = df[df["Status"] == status_filtro]
-    with col2:
-        venc_filtro = st.radio("Vencimento:", ["Ambos", "Vencidos", "A vencer"], horizontal=True)
-        if venc_filtro == "Vencidos":
-            df = df[df["Dias para Vencer"] < 0]
-        elif venc_filtro == "A vencer":
-            df = df[df["Dias para Vencer"] >= 0]
-
-    st.dataframe(df[["EAN", "Nome", "Preço Atual", "Preço Sugestão", "Status"]], use_container_width=True)
-
-    for i, row in df.iterrows():
-        st.markdown(f"#### 🛒 {row['Nome']} (EAN: {row['EAN']})")
-        st.write(f"**Loja:** {row['Loja']} | **Validade:** {row['Validade'].date()} | **Dias para vencer:** {row['Dias para Vencer']}")
-        st.write(f"**Preço Atual:** R$ {row['Preço Atual']} | **Preço Sugestão:** R$ {row.get('Preço Sugestão', '') or '-'} | **Status:** {row['Status']}")
-
-        preco_novo = st.text_input("Novo Preço de Oferta", value=row.get("Preço Sugestão", ""), key=f"novo_preco_{i}")
-        colc1, colc2 = st.columns(2)
-        with colc1:
-            if st.button("✅ Confirmar", key=f"confirmar_{i}"):
-                for j, item in enumerate(st.session_state.db):
-                    if item["EAN"] == row["EAN"] and item["Loja"] == row["Loja"]:
-                        st.session_state.db[j]["Preço Sugestão"] = preco_novo
-                        st.session_state.db[j]["Status"] = "Precificado"
-                        pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-                        st.success("Produto precificado!")
-                        st.rerun()
-        with colc2:
-            if st.button("🗑️ Excluir", key=f"excluir_{i}"):
-                st.session_state.db = [x for x in st.session_state.db if not (x["EAN"] == row["EAN"] and x["Loja"] == row["Loja"])]
-                pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-                st.warning("Produto excluído.")
-                st.rerun()
-        st.divider()
-
 # ========== RELATÓRIOS ==========
 if menu == "Relatórios":
     st.header(":bar_chart: Relatórios de Preçificação")
@@ -175,20 +95,22 @@ if menu == "Relatórios":
 
     df = df[(pd.to_datetime(df["Data Cadastro"]).dt.date >= inicio) & (pd.to_datetime(df["Data Cadastro"]).dt.date <= fim)]
 
-    st.subheader(":chart_with_upwards_trend: Gráficos")
-    col1, col2 = st.columns(2)
-    with col1:
-        venc = df[df["Dias para Vencer"] < 0].groupby("Loja")["EAN"].count()
-        st.bar_chart(venc)
-    with col2:
-        inc = df.groupby("Data Cadastro")["EAN"].count()
-        st.line_chart(inc)
-
-    st.subheader(":factory: Precificados por Loja")
-    prec = df[df["Status"] == "Precificado"].groupby("Loja")["EAN"].count()
-    st.bar_chart(prec)
-
     st.subheader(":page_facing_up: Dados Filtrados")
-    st.dataframe(df[["Loja", "EAN", "Nome", "Validade", "Preço Sugestão"]], use_container_width=True)
+    st.dataframe(df, use_container_width=True)
+
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Baixar CSV", data=csv, file_name="relatorio.csv", mime="text/csv")
+
+    def gerar_pdf(df):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt="Relatório de Produtos Precificados", ln=True, align="C")
+        pdf.ln(10)
+        for index, row in df.iterrows():
+            texto = f"Loja: {row['Loja']} | EAN: {row['EAN']} | Nome: {row['Nome']} | Validade: {row['Validade'].date()} | Preço Sugestão: R$ {row['Preço Sugestão']}"
+            pdf.multi_cell(0, 10, txt=texto)
+        return pdf.output(dest='S').encode('latin1')
+
+    pdf_bytes = gerar_pdf(df)
+    st.download_button("📄 Baixar PDF", data=pdf_bytes, file_name="relatorio.pdf", mime="application/pdf")
