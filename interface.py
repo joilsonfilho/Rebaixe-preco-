@@ -14,7 +14,7 @@ usuarios = {
     "647": {"senha": "1234", "loja": "647", "nivel": "loja"},
     "450": {"senha": "1234", "loja": "450", "nivel": "loja"},
     "531": {"senha": "1234", "loja": "531", "nivel": "loja"},
-    "2003": {"senha": "1234", "loja": "todos", "nivel": "admin"},
+    "2003": {"senha": "@abc789", "loja": "todos", "nivel": "admin"},
 }
 
 # ========== LOGIN ==========
