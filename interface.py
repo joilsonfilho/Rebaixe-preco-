@@ -1,4 +1,4 @@
-# SISTEMA COMPLETO DE REBAIXA DE PREÇOS - COM VISUAL MODERNO
+# SISTEMA COMPLETO DE REBAIXA DE PREÇOS - VISUAL MODERNO E FUNCIONAL
 import streamlit as st
 import pandas as pd
 import os
@@ -112,6 +112,10 @@ if menu == "Retaguarda" and st.session_state.nivel == "admin":
         if status != "Todos":
             df = df[df["Status"] == status]
 
+        st.subheader("📊 Tabela Geral de Produtos")
+        st.dataframe(df, use_container_width=True)
+
+        st.subheader("✏️ Ações por Produto")
         for i, row in df.iterrows():
             st.markdown(f"**🛒 {row['Nome']}**")
             st.write(f"**EAN:** {row['EAN']} | **Validade:** {row['Validade'].date()} | **Dias para vencer:** {row['Dias para Vencer']}")
@@ -152,7 +156,6 @@ if menu == "Relatórios":
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button("📥 Baixar CSV", data=csv, file_name="relatorio.csv")
 
-        # PDF
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
