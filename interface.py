@@ -1,10 +1,8 @@
-# SISTEMA COMPLETO DE REBAIXA DE PREÇOS - VISUAL REFINADO E REGRAS AVANÇADAS
+# SISTEMA COMPLETO DE REBAIXA DE PREÇOS - VISUAL MODERNO COM CARTÕES, PDF E FILTROS
 import streamlit as st
 import pandas as pd
 import os
 from datetime import date, datetime
-import matplotlib.pyplot as plt
-import io
 from fpdf import FPDF
 
 # ========== USUÁRIOS ==========
@@ -24,7 +22,6 @@ if 'logado' not in st.session_state:
     st.session_state.logado = False
     st.session_state.timeout = datetime.now()
 
-# Mantém login válido por 12 horas
 if datetime.now() > st.session_state.get("timeout", datetime.now()) + pd.Timedelta(hours=12):
     st.session_state.logado = False
 
@@ -46,7 +43,7 @@ if not st.session_state.logado:
 
 # ========== BASE ==========
 st.sidebar.write(f"👤 Usuário: {st.session_state.usuario} | Loja: {st.session_state.loja}")
-st.title(":label: Sistema de Rebaixa de Preços")
+st.title("📉 Sistema de Rebaixa de Preços")
 
 if 'db' not in st.session_state:
     if os.path.exists("produtos.csv"):
@@ -57,60 +54,77 @@ if 'db' not in st.session_state:
     else:
         st.session_state.db = []
 
-menu_opcoes = ["Cadastrar Produto"]
+df = pd.DataFrame(st.session_state.db)
+
+menu_opcoes = ["Cadastrar Produto", "Retaguarda"]
 if st.session_state.nivel == "admin":
-    menu_opcoes += ["Retaguarda", "Relatórios"]
+    menu_opcoes.append("Relatórios")
 menu = st.sidebar.selectbox("Menu", menu_opcoes)
 
-# ========== RELATÓRIOS ==========
-if menu == "Relatórios":
-    st.header(":bar_chart: Relatórios de Preçificação")
+# ========== CADASTRO ==========
+if menu == "Cadastrar Produto":
+    st.header("📝 Cadastrar Novo Produto")
+    with st.form("form_produto"):
+        ean = st.text_input("Código EAN")
+        nome = st.text_input("Nome do Produto")
+        qtd = st.number_input("Quantidade a vencer", min_value=1)
+        validade = st.date_input("Data de validade", min_value=date.today())
+        preco = st.text_input("Preço Atual")
+        responsavel = st.text_input("Responsável")
+        loja = st.session_state.loja if st.session_state.nivel != "admin" else st.selectbox("Loja", ["710", "728", "736", "655", "647", "450", "531"])
+        enviado = st.form_submit_button("Salvar")
+
+    if enviado:
+        if not all([ean, nome, qtd, validade, preco, responsavel]):
+            st.warning("⚠️ Preencha todos os campos obrigatórios!")
+        else:
+            novo = {
+                "EAN": ean,
+                "Nome": nome,
+                "Quantidade": qtd,
+                "Validade": validade.strftime("%Y-%m-%d"),
+                "Preço Atual": preco,
+                "Preço Sugestão": "",
+                "Responsável": responsavel,
+                "Loja": loja,
+                "Data Cadastro": date.today().strftime("%Y-%m-%d"),
+                "Status": "Aguardando"
+            }
+            st.session_state.db.append(novo)
+            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+            st.success("✅ Produto cadastrado com sucesso!")
+            st.experimental_rerun()
+
+# ========== RETAGUARDA ==========
+if menu == "Retaguarda":
+    st.header("📋 Retaguarda de Produtos")
     df = pd.DataFrame(st.session_state.db)
     df["Validade"] = pd.to_datetime(df["Validade"], errors='coerce')
     df["Dias para Vencer"] = (df["Validade"] - pd.to_datetime(date.today())).dt.days
-    df["Dias de Antecedência"] = (pd.to_datetime(df["Validade"]) - pd.to_datetime(df["Data Cadastro"])).dt.days
     df["Loja"] = df["Loja"].astype(str)
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        loja_filtro = st.selectbox("Filtrar por Loja", ["Todos"] + sorted(df["Loja"].unique()))
-        if loja_filtro != "Todos":
-            df = df[df["Loja"] == loja_filtro]
-    with col2:
-        status_rel = st.selectbox("Status", ["Todos", "Aguardando", "Precificado"])
-        if status_rel != "Todos":
-            df = df[df["Status"] == status_rel]
-    with col3:
-        venc_rel = st.selectbox("Vencimento", ["Todos", "A vencer", "Vencidos"])
-        if venc_rel == "A vencer":
-            df = df[df["Dias para Vencer"] >= 0]
-        elif venc_rel == "Vencidos":
-            df = df[df["Dias para Vencer"] < 0]
+    loja_filtro = st.selectbox("Filtrar por Loja", sorted(df["Loja"].unique()))
+    df = df[df["Loja"] == loja_filtro]
 
-    col1, col2 = st.columns(2)
-    with col1:
-        inicio = st.date_input("Data Inicial", value=date.today().replace(day=1))
-    with col2:
-        fim = st.date_input("Data Final", value=date.today())
-
-    df = df[(pd.to_datetime(df["Data Cadastro"]).dt.date >= inicio) & (pd.to_datetime(df["Data Cadastro"]).dt.date <= fim)]
-
-    st.subheader(":page_facing_up: Dados Filtrados")
-    st.dataframe(df, use_container_width=True)
-
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Baixar CSV", data=csv, file_name="relatorio.csv", mime="text/csv")
-
-    def gerar_pdf(df):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Relatório de Produtos Precificados", ln=True, align="C")
-        pdf.ln(10)
-        for index, row in df.iterrows():
-            texto = f"Loja: {row['Loja']} | EAN: {row['EAN']} | Nome: {row['Nome']} | Validade: {row['Validade'].date()} | Preço Sugestão: R$ {row['Preço Sugestão']}"
-            pdf.multi_cell(0, 10, txt=texto)
-        return pdf.output(dest='S').encode('latin1')
-
-    pdf_bytes = gerar_pdf(df)
-    st.download_button("📄 Baixar PDF", data=pdf_bytes, file_name="relatorio.pdf", mime="application/pdf")
+    for i, row in df.iterrows():
+        with st.container():
+            st.markdown(f"#### 🛒 {row['Nome']} (EAN: {row['EAN']})")
+            st.write(f"📍 Loja: {row['Loja']} | 🗓️ Validade: {row['Validade'].date()} | ⏳ Dias: {row['Dias para Vencer']}")
+            st.write(f"💲 Atual: R$ {row['Preço Atual']} | 💡 Sugestão: R$ {row.get('Preço Sugestão', '-')}")
+            preco_novo = st.text_input("Novo Preço de Oferta", value=row.get("Preço Sugestão", ""), key=f"preco_{i}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Confirmar", key=f"confirma_{i}"):
+                    for idx, item in enumerate(st.session_state.db):
+                        if item["EAN"] == row["EAN"] and item["Loja"] == row["Loja"]:
+                            st.session_state.db[idx]["Preço Sugestão"] = preco_novo
+                            st.session_state.db[idx]["Status"] = "Precificado"
+                            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+                            st.success("Produto atualizado!")
+                            st.rerun()
+            with col2:
+                if st.button("🗑️ Excluir", key=f"excluir_{i}"):
+                    st.session_state.db = [item for item in st.session_state.db if not (item["EAN"] == row["EAN"] and item["Loja"] == row["Loja"])]
+                    pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+                    st.warning("Produto excluído.")
+                    st.rerun()
