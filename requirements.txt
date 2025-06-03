@@ -1,0 +1,4 @@
+streamlit
+streanlit-webrtc==0.45.2 
+opencv-python
+pandas
