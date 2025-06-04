@@ -111,4 +111,4 @@ if st.session_state.nivel == "admin":
     menu_opcoes.insert(1, "Retaguarda")
 menu = st.sidebar.selectbox("Menu", menu_opcoes)
 
-# (continuação do código segue normalmente...)
+# As próximas seções (Cadastro, Retaguarda, Relatórios e Gráficos) seguem na próxima etapa...
