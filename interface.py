@@ -101,4 +101,56 @@ if not st.session_state.logado:
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# Continuação: funcionalidades de cadastro, retaguarda, relatórios e gráficos serão integradas a seguir.
+# ========== BASE DE DADOS ==========
+if 'db' not in st.session_state:
+    if os.path.exists("produtos.csv"):
+        try:
+            st.session_state.db = pd.read_csv("produtos.csv").to_dict(orient="records")
+        except:
+            st.session_state.db = []
+    else:
+        st.session_state.db = []
+
+# ========== MENU ==========
+st.sidebar.write(f"👤 Usuário: {st.session_state.usuario} | Loja: {st.session_state.loja}")
+menu_opcoes = ["Cadastrar Produto"]
+if st.session_state.nivel == "admin":
+    menu_opcoes.append("Retaguarda")
+menu_opcoes += ["Relatórios", "Gráficos"]
+menu = st.sidebar.selectbox("Menu", menu_opcoes)
+
+# ========== CADASTRO DE PRODUTO ==========
+if menu == "Cadastrar Produto":
+    st.subheader("📋 Cadastro de Produto")
+    with st.form("cadastro_form"):
+        ean = st.text_input("Código EAN")
+        nome = st.text_input("Nome do Produto")
+        qtd = st.number_input("Quantidade a vencer", min_value=1)
+        validade = st.date_input("Data de Validade", value=date.today())
+        preco = st.text_input("Preço Atual")
+        responsavel = st.text_input("Responsável")
+        loja = st.session_state.loja if st.session_state.nivel != "admin" else st.selectbox("Loja", sorted(set([v['loja'] for v in usuarios.values() if v['nivel'] == 'loja'])))
+        enviar = st.form_submit_button("💾 Salvar")
+
+    if enviar:
+        if not all([ean, nome, preco, responsavel]):
+            st.warning("⚠️ Todos os campos obrigatórios devem ser preenchidos!")
+        else:
+            novo = {
+                "EAN": ean,
+                "Nome": nome,
+                "Quantidade": qtd,
+                "Validade": validade.strftime("%Y-%m-%d"),
+                "Preço Atual": preco,
+                "Preço Sugestão": "",
+                "Responsável": responsavel,
+                "Loja": loja,
+                "Data Cadastro": date.today().strftime("%Y-%m-%d"),
+                "Status": "Aguardando"
+            }
+            st.session_state.db.append(novo)
+            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+            st.success("✅ Produto cadastrado com sucesso!")
+            st.experimental_rerun()
+
+# Continuação: Retaguarda, Relatórios, Gráficos e melhorias visuais seguem no próximo bloco.
