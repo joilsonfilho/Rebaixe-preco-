@@ -54,38 +54,14 @@ if datetime.now() > st.session_state.get("timeout", datetime.now()) + pd.Timedel
 
 if not st.session_state.logado:
     st.markdown("""
-        <style>
-        .login-container {
-            max-width: 400px;
-            margin: auto;
-            background-color: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
-        }
-        .login-input input {
-            font-size: 16px;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-        .login-button button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-        }
-        </style>
+        <div style="text-align:center; padding: 2em; background: #fff; border-radius: 10px; width: 350px; margin: auto;">
+            <h2>🔐 Login</h2>
     """, unsafe_allow_html=True)
-    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-    st.title("🔐 Login - Sistema de Rebaixa")
-    usuario = st.text_input("👤 Usuário", key="login_user")
-    senha = st.text_input("🔑 Senha", type="password", key="login_pass")
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
     col1, col2 = st.columns([2, 1])
     with col1:
-        if st.button("✅ Entrar"):
+        if st.button("Entrar"):
             if usuario in usuarios and usuarios[usuario]["senha"] == senha:
                 st.session_state.logado = True
                 st.session_state.usuario = usuario
@@ -96,12 +72,13 @@ if not st.session_state.logado:
             else:
                 st.error("❌ Usuário ou senha inválidos.")
     with col2:
-        if st.button("🔄 Esqueci Senha"):
-            st.info("Entre em contato com o administrador para redefinir sua senha.")
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.button("Esqueci a senha")
     st.stop()
 
-# ========== BASE DE DADOS ==========
+# ========== BASE ==========
+st.sidebar.write(f"👤 Usuário: {st.session_state.usuario} | Loja: {st.session_state.loja}")
+st.title("📦 Sistema de Rebaixa de Preços")
+
 if 'db' not in st.session_state:
     if os.path.exists("produtos.csv"):
         try:
@@ -112,45 +89,9 @@ if 'db' not in st.session_state:
         st.session_state.db = []
 
 # ========== MENU ==========
-st.sidebar.write(f"👤 Usuário: {st.session_state.usuario} | Loja: {st.session_state.loja}")
-menu_opcoes = ["Cadastrar Produto"]
+menu_opcoes = ["Cadastrar Produto", "Relatórios", "Gráficos"]
 if st.session_state.nivel == "admin":
-    menu_opcoes.append("Retaguarda")
-menu_opcoes += ["Relatórios", "Gráficos"]
+    menu_opcoes.insert(1, "Retaguarda")
 menu = st.sidebar.selectbox("Menu", menu_opcoes)
 
-# ========== CADASTRO DE PRODUTO ==========
-if menu == "Cadastrar Produto":
-    st.subheader("📋 Cadastro de Produto")
-    with st.form("cadastro_form"):
-        ean = st.text_input("Código EAN")
-        nome = st.text_input("Nome do Produto")
-        qtd = st.number_input("Quantidade a vencer", min_value=1)
-        validade = st.date_input("Data de Validade", value=date.today())
-        preco = st.text_input("Preço Atual")
-        responsavel = st.text_input("Responsável")
-        loja = st.session_state.loja if st.session_state.nivel != "admin" else st.selectbox("Loja", sorted(set([v['loja'] for v in usuarios.values() if v['nivel'] == 'loja'])))
-        enviar = st.form_submit_button("💾 Salvar")
-
-    if enviar:
-        if not all([ean, nome, preco, responsavel]):
-            st.warning("⚠️ Todos os campos obrigatórios devem ser preenchidos!")
-        else:
-            novo = {
-                "EAN": ean,
-                "Nome": nome,
-                "Quantidade": qtd,
-                "Validade": validade.strftime("%Y-%m-%d"),
-                "Preço Atual": preco,
-                "Preço Sugestão": "",
-                "Responsável": responsavel,
-                "Loja": loja,
-                "Data Cadastro": date.today().strftime("%Y-%m-%d"),
-                "Status": "Aguardando"
-            }
-            st.session_state.db.append(novo)
-            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-            st.success("✅ Produto cadastrado com sucesso!")
-            st.experimental_rerun()
-
-# Continuação: Retaguarda, Relatórios, Gráficos e melhorias visuais seguem no próximo bloco.
+# (continuação do código segue normalmente...)
