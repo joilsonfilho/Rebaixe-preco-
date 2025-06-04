@@ -29,6 +29,22 @@ st.markdown("""
         border: 1px solid #ddd;
         background-color: white;
     }
+    .login-box {
+        text-align:center;
+        padding: 2em;
+        background: #fff;
+        border-radius: 10px;
+        width: 350px;
+        margin: auto;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .login-title {
+        font-size: 24px;
+        margin-bottom: 1em;
+    }
+    .login-button {
+        margin-top: 1em;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -54,14 +70,14 @@ if datetime.now() > st.session_state.get("timeout", datetime.now()) + pd.Timedel
 
 if not st.session_state.logado:
     st.markdown("""
-        <div style="text-align:center; padding: 2em; background: #fff; border-radius: 10px; width: 350px; margin: auto;">
-            <h2>🔐 Login</h2>
+        <div class="login-box">
+            <div class="login-title">🔐 Login</div>
     """, unsafe_allow_html=True)
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
     col1, col2 = st.columns([2, 1])
     with col1:
-        if st.button("Entrar"):
+        if st.button("Entrar", key="entrar"):
             if usuario in usuarios and usuarios[usuario]["senha"] == senha:
                 st.session_state.logado = True
                 st.session_state.usuario = usuario
@@ -72,7 +88,8 @@ if not st.session_state.logado:
             else:
                 st.error("❌ Usuário ou senha inválidos.")
     with col2:
-        st.button("Esqueci a senha")
+        st.button("Esqueci a senha", key="esqueci")
+    st.markdown("""</div>""", unsafe_allow_html=True)
     st.stop()
 
 # ========== BASE ==========
