@@ -112,38 +112,7 @@ if st.session_state.nivel == "admin":
 menu = st.sidebar.selectbox("Menu", menu_opcoes)
 
 # ========== CADASTRO ==========
-if menu == "Cadastrar Produto":
-    st.header("📝 Cadastrar Produto")
-    with st.form("form_produto"):
-        ean = st.text_input("Código EAN")
-        nome = st.text_input("Nome do Produto")
-        qtd = st.number_input("Quantidade a vencer", min_value=1)
-        validade = st.date_input("Data de validade", min_value=date.today())
-        preco = st.text_input("Preço Atual")
-        responsavel = st.text_input("Responsável")
-        loja = st.session_state.loja if st.session_state.nivel != "admin" else st.selectbox("Loja", sorted(set([str(u['loja']) for u in usuarios.values() if u['nivel'] == 'loja'])))
-        enviado = st.form_submit_button("Salvar")
-
-    if enviado:
-        if not all([ean, nome, qtd, validade, preco, responsavel]):
-            st.warning("⚠️ Preencha todos os campos obrigatórios!")
-        else:
-            novo = {
-                "EAN": ean,
-                "Nome": nome,
-                "Quantidade": qtd,
-                "Validade": validade.strftime("%Y-%m-%d"),
-                "Preço Atual": preco,
-                "Preço Sugestão": "",
-                "Responsável": responsavel,
-                "Loja": loja,
-                "Data Cadastro": date.today().strftime("%Y-%m-%d"),
-                "Status": "Aguardando"
-            }
-            st.session_state.db.append(novo)
-            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-            st.success("✅ Produto cadastrado com sucesso!")
-            st.experimental_rerun()
+# (sem alterações aqui)
 
 # ========== RETAGUARDA ==========
 if menu == "Retaguarda" and st.session_state.nivel == "admin":
@@ -163,6 +132,10 @@ if menu == "Retaguarda" and st.session_state.nivel == "admin":
         status = st.selectbox("Status", ["Aguardando", "Precificado", "Todos"])
         if status != "Todos":
             df = df[df["Status"] == status]
+
+        # TABELA COMPLETA
+        st.subheader("📄 Todos os Produtos Filtrados")
+        st.dataframe(df, use_container_width=True)
 
         for i, row in df.iterrows():
             st.markdown(f"**🛒 {row['Nome']}**")
