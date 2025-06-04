@@ -42,9 +42,6 @@ st.markdown("""
         font-size: 24px;
         margin-bottom: 1em;
     }
-    .login-button {
-        margin-top: 1em;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -144,6 +141,43 @@ if menu == "Cadastrar Produto":
             pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
             st.success("✅ Produto cadastrado com sucesso!")
             st.rerun()
+
+# ========== RETAGUARDA ==========
+if menu == "Retaguarda" and st.session_state.nivel == "admin":
+    st.header("📋 Retaguarda")
+    df = pd.DataFrame(st.session_state.db)
+    if df.empty:
+        st.info("Nenhum produto cadastrado.")
+    else:
+        df["Validade"] = pd.to_datetime(df["Validade"], errors='coerce')
+        df["Dias para Vencer"] = (df["Validade"] - pd.to_datetime(date.today())).dt.days
+
+        loja_selecionada = st.selectbox("Filtrar por Loja:", ["Todas"] + sorted(df["Loja"].unique()))
+        if loja_selecionada != "Todas":
+            df = df[df["Loja"] == loja_selecionada]
+
+        df = df[df["Status"] == "Aguardando"]  # fixar filtro padrão aguardando
+
+        st.dataframe(df, use_container_width=True)
+
+        for i, row in df.iterrows():
+            with st.expander(f"🛒 {row['Nome']} (Loja {row['Loja']})"):
+                preco_novo = st.text_input("Novo Preço de Oferta", value=row["Preço Sugestão"], key=f"preco_{i}")
+                col1, col2 = st.columns(2)
+                if col1.button("✅ Confirmar", key=f"confirmar_{i}"):
+                    for j, item in enumerate(st.session_state.db):
+                        if item["EAN"] == row["EAN"] and item["Loja"] == row["Loja"]:
+                            st.session_state.db[j]["Preço Sugestão"] = preco_novo
+                            st.session_state.db[j]["Status"] = "Precificado"
+                            break
+                    pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+                    st.success("Produto atualizado!")
+                    st.rerun()
+                if col2.button("🗑️ Excluir", key=f"excluir_{i}"):
+                    st.session_state.db = [x for x in st.session_state.db if not (x["EAN"] == row["EAN"] and x["Loja"] == row["Loja"])]
+                    pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+                    st.warning("Produto excluído.")
+                    st.rerun()
 
 # ========== GRÁFICOS ==========
 if menu == "Gráficos":
