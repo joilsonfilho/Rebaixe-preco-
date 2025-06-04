@@ -42,6 +42,9 @@ st.markdown("""
         font-size: 24px;
         margin-bottom: 1em;
     }
+    .login-button {
+        margin-top: 1em;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -102,10 +105,10 @@ if 'db' not in st.session_state:
     else:
         st.session_state.db = []
 
+df = pd.DataFrame(st.session_state.db)
+
 # ========== MENU ==========
-menu_opcoes = ["Cadastrar Produto", "Relatórios", "Gráficos"]
-if st.session_state.nivel == "admin":
-    menu_opcoes.insert(1, "Retaguarda")
+menu_opcoes = ["Cadastrar Produto", "Retaguarda", "Relatórios", "Gráficos"]
 menu = st.sidebar.selectbox("Menu", menu_opcoes)
 
 # ========== CADASTRO ==========
@@ -140,71 +143,80 @@ if menu == "Cadastrar Produto":
             st.session_state.db.append(novo_produto)
             pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
             st.success("✅ Produto cadastrado com sucesso!")
-            st.rerun()
+            st.experimental_rerun()
 
 # ========== RETAGUARDA ==========
-if menu == "Retaguarda" and st.session_state.nivel == "admin":
+if menu == "Retaguarda":
     st.header("📋 Retaguarda")
-    df = pd.DataFrame(st.session_state.db)
-    if df.empty:
-        st.info("Nenhum produto cadastrado.")
+    df["Validade"] = pd.to_datetime(df["Validade"], errors='coerce')
+    df["Dias para Vencer"] = (df["Validade"] - pd.to_datetime(date.today())).dt.days
+
+    loja_filtro = st.selectbox("Loja", ["Todas"] + sorted(df["Loja"].unique()))
+    if loja_filtro != "Todas":
+        df = df[df["Loja"] == loja_filtro]
+
+    status_filtro = st.selectbox("Status", ["Aguardando", "Precificado", "Todos"], index=0)
+    if status_filtro != "Todos":
+        df = df[df["Status"] == status_filtro]
+
+    venc_filtro = st.selectbox("Vencimento", ["Ambos", "Vencidos", "A vencer"], index=0)
+    if venc_filtro == "Vencidos":
+        df = df[df["Dias para Vencer"] < 0]
+    elif venc_filtro == "A vencer":
+        df = df[df["Dias para Vencer"] >= 0]
+
+    for i, row in df.iterrows():
+        st.markdown(f"**🛒 {row['Nome']}**")
+        st.write(f"EAN: {row['EAN']} | Validade: {row['Validade'].date()} | Dias para vencer: {row['Dias para Vencer']}")
+        novo_preco = st.text_input("Novo Preço de Oferta", value=row.get("Preço Sugestão", ""), key=f"preco_{i}")
+        col1, col2 = st.columns(2)
+        if col1.button("✅ Confirmar", key=f"conf_{i}"):
+            for j in range(len(st.session_state.db)):
+                if st.session_state.db[j]["EAN"] == row["EAN"] and st.session_state.db[j]["Loja"] == row["Loja"]:
+                    st.session_state.db[j]["Preço Sugestão"] = novo_preco
+                    st.session_state.db[j]["Status"] = "Precificado"
+                    break
+            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+            st.success("Produto atualizado!")
+            st.rerun()
+        if col2.button("🗑️ Excluir", key=f"exc_{i}"):
+            st.session_state.db = [x for x in st.session_state.db if not (x["EAN"] == row["EAN"] and x["Loja"] == row["Loja"])]
+            pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
+            st.warning("Produto excluído.")
+            st.rerun()
+    st.dataframe(df)
+
+# ========== RELATÓRIOS ==========
+if menu == "Relatórios":
+    st.header("📄 Relatórios")
+    if not df.empty:
+        loja = st.selectbox("Loja", ["Todas"] + sorted(df["Loja"].unique()))
+        status = st.selectbox("Status", ["Todos", "Aguardando", "Precificado"])
+        if loja != "Todas":
+            df = df[df["Loja"] == loja]
+        if status != "Todos":
+            df = df[df["Status"] == status]
+        st.subheader("📋 Tabela: EAN, Nome, Validade, Preço Sugestão")
+        tabela = df[["EAN", "Nome", "Validade", "Preço Sugestão"]]
+        st.dataframe(tabela)
     else:
-        df["Validade"] = pd.to_datetime(df["Validade"], errors='coerce')
-        df["Dias para Vencer"] = (df["Validade"] - pd.to_datetime(date.today())).dt.days
-
-        loja_selecionada = st.selectbox("Filtrar por Loja:", ["Todas"] + sorted(df["Loja"].unique()))
-        if loja_selecionada != "Todas":
-            df = df[df["Loja"] == loja_selecionada]
-
-        df = df[df["Status"] == "Aguardando"]  # fixar filtro padrão aguardando
-
-        st.dataframe(df, use_container_width=True)
-
-        for i, row in df.iterrows():
-            with st.expander(f"🛒 {row['Nome']} (Loja {row['Loja']})"):
-                preco_novo = st.text_input("Novo Preço de Oferta", value=row["Preço Sugestão"], key=f"preco_{i}")
-                col1, col2 = st.columns(2)
-                if col1.button("✅ Confirmar", key=f"confirmar_{i}"):
-                    for j, item in enumerate(st.session_state.db):
-                        if item["EAN"] == row["EAN"] and item["Loja"] == row["Loja"]:
-                            st.session_state.db[j]["Preço Sugestão"] = preco_novo
-                            st.session_state.db[j]["Status"] = "Precificado"
-                            break
-                    pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-                    st.success("Produto atualizado!")
-                    st.rerun()
-                if col2.button("🗑️ Excluir", key=f"excluir_{i}"):
-                    st.session_state.db = [x for x in st.session_state.db if not (x["EAN"] == row["EAN"] and x["Loja"] == row["Loja"])]
-                    pd.DataFrame(st.session_state.db).to_csv("produtos.csv", index=False)
-                    st.warning("Produto excluído.")
-                    st.rerun()
+        st.info("Nenhum dado para relatório.")
 
 # ========== GRÁFICOS ==========
 if menu == "Gráficos":
-    st.header("📊 Análises Visuais")
-    df = pd.DataFrame(st.session_state.db)
+    st.header("📊 Gráficos")
     if not df.empty:
-        df["Validade"] = pd.to_datetime(df["Validade"], errors='coerce')
-        df["Dias para Vencer"] = (df["Validade"] - pd.to_datetime(date.today())).dt.days
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("📆 Inclusões por Data")
-            inc = df.groupby("Data Cadastro")["EAN"].count()
-            st.line_chart(inc)
-        with col2:
-            st.subheader("🏪 Precificados por Loja")
-            prec = df[df["Status"] == "Precificado"].groupby("Loja")["EAN"].count()
-            st.bar_chart(prec)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("⛔ Vencidos por Loja")
-            venc = df[df["Dias para Vencer"] < 0].groupby("Loja")["EAN"].count()
-            st.bar_chart(venc)
-        with col2:
-            st.subheader("📌 Status Geral")
-            status_df = df["Status"].value_counts()
-            st.bar_chart(status_df)
+        loja = st.selectbox("Loja", ["Todas"] + sorted(df["Loja"].unique()))
+        status = st.selectbox("Status", ["Todos", "Aguardando", "Precificado"])
+        vencimento = st.selectbox("Vencimento", ["Ambos", "Vencidos", "A vencer"])
+        if loja != "Todas":
+            df = df[df["Loja"] == loja]
+        if status != "Todos":
+            df = df[df["Status"] == status]
+        if vencimento == "Vencidos":
+            df = df[df["Dias para Vencer"] < 0]
+        elif vencimento == "A vencer":
+            df = df[df["Dias para Vencer"] >= 0]
+        st.bar_chart(df["Status"].value_counts())
     else:
-        st.info("Nenhum dado disponível para gráficos.")
+        st.info("Nenhum dado para gráficos.")
